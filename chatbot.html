@@ -1407,7 +1407,97 @@ const SOURCE_URLS = {
     DDLCB_MSG = "Pelas suas respostas, o estabelecimento provavelmente está <strong>dispensado de AVCB (Risco I)</strong>.<br>Se houver interesse, você pode pedir a <strong>DDLCB</strong> (Declaração de Dispensa de Licenciamento do Corpo de Bombeiros) ao Centro de Atividades Técnicas (CAT) da sua região — presencialmente, por e-mail ou aplicativo de mensagem. Documentos (NT 1.01, item 5.5.5):<ul style='margin:0; padding-left:20px'><li>Documento de identidade com foto</li><li>Requerimento para emissão da DDLCB (modelo do Anexo B da NT 1.01, com o CPF e os CNAEs)</li><li>Comprovante de inscrição e situação cadastral (CNPJ)</li></ul>A Sá Moraes Engenharia pode preparar e fazer o pedido por você.<br>Mesmo dispensado, é obrigatório manter extintor(es) de incêndio e as demais medidas de segurança conforme o COSCIP (Decreto nº 52.005/2021, art. 8º).",
     TOMBADO_AVISO = "Pelas suas respostas, o estabelecimento atenderia às condições de dispensa de AVCB (Risco I), exceto por ser um imóvel tombado. O Decreto Estadual nº 52.005/2021, atualizado em 2025, não traz mais o tombamento como impedimento, mas o formulário do Corpo de Bombeiros para pedir a dispensa ainda pergunta sobre patrimônio histórico. Por cautela, o resultado abaixo considera o processo de AVCB (Risco II). Um técnico da Sá Moraes Engenharia pode avaliar se o seu caso pode seguir pela dispensa.",
     ALTERACAO_AVISO = "<strong>Atenção:</strong> a alteração ou correção de dados de um AVCB/AR vigente (razão social, endereço, CNAE, erro de digitação etc.) segue um processo próprio — requerimento ao CAT conforme o Anexo D da NT 1.01, sem nova taxa de vistoria —, desde que não haja mudança de área, de ocupação, de sistemas preventivos ou do nível de risco. As próximas perguntas montam o checklist de um processo completo; confirme com um técnico da Sá Moraes Engenharia qual é o seu caso.";
+/* Botão "Documentos AVCB" — sempre antes do aviso de simulação e da pergunta do técnico (01/10/2026).
+   Aparece uma vez por resultado. Só aparece de novo ("Documentos AVCB atualizados") quando a lista mudou,
+   e só nos pontos de fechamento (depois das perguntas que podem mudar a lista, nunca entre elas).
+   Retorna "first", "updated", "same" ou "" (lista vazia). */
+/* Cenários sem processo de AVCB próprio, identificados pelas respostas guardadas no código do questionário
+   (C09 = "Não": food truck/barraca em espaço coletivo; A2 = "Não": alteração de dados — Anexo D).
+   A janela de documentos, o PDF, o código, o QR Code e a mensagem do WhatsApp usam a mesma identificação. */
+const ANEXO_D_DOCS = [
+    ["Requerimento de correção de AVCB (modelo do Anexo D da NT 1.01)", "Pedido feito ao Centro de Atividades Técnicas (CAT) da região."],
+    ["RG e CPF do requerente", ""],
+    ["Ficha imobiliária do imóvel", ""],
+    ["Comprovante de inscrição e situação cadastral (CNPJ)", ""],
+    ["Comprovante de pagamento do DAE-20 (complementar), quando houver", ""],
+    ["Procuração, se o pedido for feito por procurador", ""]
+];
+
+function docsScenario(e) {
+    const t = e && e.pairs || [],
+        a = e => {
+            for (let a = t.length - 1; a >= 0; a--)
+                if (t[a][0] === e) return t[a][1];
+            return null
+        };
+    return 2 === a("A2") ? {
+        id: "anexoD",
+        a1: a("A1") | 0
+    } : 2 === a("C09") ? {
+        id: "foodpark"
+    } : null
+}
+
+function scenarioInfo(e) {
+    if (!e) return null;
+    if ("foodpark" === e.id) return {
+        title: "Lista de documentos — food truck ou barraca em espaço coletivo",
+        badge: "AVCB do espaço (organizador)",
+        subject: "food truck ou barraca em espaço coletivo (food park, feira ou evento)",
+        intro: "<strong>Não há documentos do AVCB para você providenciar neste caso.</strong> Quando o food truck ou a barraca funciona junto com outros (food park, feira ou evento), o espaço inteiro é tratado como um só imóvel: quem pede o AVCB — de funcionamento ou de evento temporário — é o <strong>organizador ou responsável pelo espaço</strong>. O Corpo de Bombeiros não fiscaliza os veículos, só as áreas e as estruturas de apoio. Procure o organizador para confirmar que o espaço está regularizado.",
+        legal: "Art. 5º, §§ 2º e 3º do Decreto Estadual nº 52.005/2021.",
+        docs: [],
+        notes: []
+    };
+    const t = A1_ITEMS.filter((t, a) => e.a1 & 1 << a),
+        a = t.map(e => e.id),
+        o = [];
+    return a.includes("cnpj") && o.push("A troca de CNPJ só é aceita com o <strong>mesmo CNAE</strong> principal e os <strong>mesmos responsáveis</strong> no contrato social."), a.includes("area") && o.push("A correção de área só é aceita se não mudar o valor da taxa de vistoria nem os sistemas preventivos."), o.push("O novo AVCB mantém o <strong>mesmo vencimento</strong> do AVCB original (item 5.13.3)."), {
+        title: "Lista de documentos — alteração de dados do AVCB (Anexo D)",
+        badge: "Alteração de dados — Anexo D",
+        subject: "alteração de dados do AVCB (Anexo D)",
+        intro: "Este caso <strong>não usa a lista de documentos de um processo de AVCB</strong>. A alteração ou correção de dados de um AVCB vigente segue um processo próprio, sem nova vistoria e sem nova taxa de vistoria: o pedido é feito ao CAT da região, pelo modelo do <strong>Anexo D da NT 1.01</strong>." + (t.length ? " <br><strong>Dados a alterar:</strong> " + t.map(e => e.label).join(", ") + "." : ""),
+        legal: "NT 1.01/2024 do CBMPE, itens 5.13.1 a 5.13.3 e Anexo D.",
+        docs: ANEXO_D_DOCS,
+        notes: o
+    }
+}
+const DOCS_EMPTY_TEXT = "<strong>Nenhum documento foi associado às respostas informadas.</strong> Isso pode acontecer em combinações pouco comuns de respostas. Confirme com um técnico da Sá Moraes Engenharia quais documentos se aplicam ao seu caso.";
+
+function docsSig(e, t) {
+    const a = docsScenario(t);
+    return (a ? a.id + ":" + (a.a1 | 0) : "") + "#" + [...e.keys()].sort().join("|")
+}
+async function ensureDocsShown() {
+    const e = chatEpoch,
+        t = computeRecommended(),
+        a = answersFromLiveState(),
+        sc = docsScenario(a);
+    let c = chatMessages.querySelector(".chat-docs-cta");
+    /* mudou o cenário (ex.: entrou na alteração de dados depois de um resultado): é um resultado novo */
+    if (chatFinishRec = t, chatFinishAnswers = a, c && (c.dataset.sc || "") !== (sc ? sc.id : "") && (retireDocsCta(), c = null), c) {
+        if (c.dataset.sig === docsSig(t, a)) return "same";
+        if (await addChatBubble("Atualizei a lista de documentos com base nas novas respostas."), e !== chatEpoch) return "updated";
+        return retireDocsCta(), docsButton(t, a, "Documentos AVCB atualizados"), "updated"
+    }
+    /* sem lista de AVCB (cenário especial ou lista vazia): o botão aparece mesmo assim; a janela explica o motivo */
+    if (sc || !t.size) {
+        if (await addChatBubble("Confira no botão abaixo os documentos para este caso."), e !== chatEpoch) return "first";
+        if (docsButton(t, a), await addChatBubble("Salve o Código do Questionário disponível em <button type='button' class='chat-inline-link-btn chat-inline-docs-open'>Documentos AVCB</button> para reabrir esta informação ou gerar o PDF quando quiser."), e !== chatEpoch) return "first";
+        return "first"
+    }
+    if (await addChatBubble("O checklist orientativo de documentos está disponível no botão abaixo. Ele não é exaustivo: o Corpo de Bombeiros pode exigir outros documentos conforme o caso."), e !== chatEpoch) return;
+    if (docsButton(t, a), await addChatBubble("Envie o PDF gerado em <button type='button' class='chat-inline-link-btn chat-inline-docs-open'>Documentos AVCB</button> para acelerar seu processo."), e !== chatEpoch) return;
+    return await addChatBubble("Salve o Código do Questionário disponível em <button type='button' class='chat-inline-link-btn chat-inline-docs-open'>Documentos AVCB</button> para sempre gerar o PDF dos Documentos AVCB."), "first"
+}
+
+/* Marca os botões de documentos já exibidos como de um resultado anterior (novo resultado = novo botão) */
+function retireDocsCta() {
+    chatMessages.querySelectorAll(".chat-docs-cta").forEach(e => e.classList.remove("chat-docs-cta"))
+}
 async function addResultDisclaimer() {
+    const e = chatEpoch;
+    if (await ensureDocsShown(), e !== chatEpoch) return;
     await addChatBubble("<small>⚠️ Esta é uma simulação automatizada. O resultado pode mudar após análise do imóvel, dos documentos ou das regras aplicáveis. Antes de protocolar pedidos ou tomar decisões técnicas, confirme as informações com um profissional habilitado e com o CBMPE. Seus dados ficam somente neste navegador. <button type='button' class='chat-inline-link-btn chat-inline-erase'>Apagar meus dados</button></small>", !0, void 0, CHAT_LIMITATIONS_NOTE)
 }
 
@@ -2024,6 +2114,12 @@ const occupationTypes = {
         Hemocentro: "8640-2/12 (serviços de hemoterapia)",
         "Clínica de diagnóstico por imagem, radioterapia ou quimioterapia": "8640-2/04, 05, 06, 10, 11 ou 13 (diagnóstico por imagem, quimioterapia, radioterapia, litotripsia)",
         "Centro de apoio a pacientes com câncer ou AIDS": "8711-5/04 (centros de apoio a pacientes com câncer e com AIDS)"
+    },
+    /* Risco III fixo por enquadramento no Art. 6º, VI do Decreto 52.005/2021 (não vem do Anexo II) — critério adotado pela Sá Moraes Engenharia */
+    R3_FIXO_BY_LABEL = {
+        "Asilo ou abrigo para idosos": "asilo ou abrigo para idosos — local cujos residentes necessitam de cuidados especiais que dificultam a locomoção (Art. 6º, VI do Decreto nº 52.005/2021)",
+        "Casa geriátrica": "casa geriátrica — local cujos residentes necessitam de cuidados especiais que dificultam a locomoção (Art. 6º, VI do Decreto nº 52.005/2021)",
+        "Clínica / casa de repouso": "clínica ou casa de repouso — local cujos pacientes necessitam de cuidados especiais que dificultam a locomoção (Art. 6º, VI do Decreto nº 52.005/2021)"
     };
 var establishments = [
     ["Academia de ginástica", "K"],
@@ -2190,7 +2286,8 @@ var establishments = [
     type: e[1],
     note: e[2] || "",
     cnaeR3: CNAE_R3_BY_LABEL[e[0]] || "",
-    cnaeR2: CNAE_R2_BY_LABEL[e[0]] || ""
+    cnaeR2: CNAE_R2_BY_LABEL[e[0]] || "",
+    r3Fixo: R3_FIXO_BY_LABEL[e[0]] || ""
 })).sort((e, t) => e.label.localeCompare(t.label, "pt-BR", {
     sensitivity: "base"
 }));
@@ -4163,10 +4260,11 @@ function segmentLevel() {
 }
 
 function labelCnaeLevel(e) {
-    return e ? e.cnaeR3 ? 3 : e.cnaeR2 ? 2 : 1 : 0
+    return e ? e.cnaeR3 || e.r3Fixo ? 3 : e.cnaeR2 ? 2 : 1 : 0
 }
 /* Nível mínimo de risco vindo da atividade: CNAEs informados (E0) têm prioridade; senão, opção da lista + segmento */
 function estFloorLevel() {
+    if (estR3Fixo()) return 3;
     if (Array.isArray(state.cnaes) && state.cnaes.length) {
         const e = state.cnaes.map(e => cnaeInfo(e)?.level || 1);
         return Math.max(1, ...e)
@@ -4174,7 +4272,15 @@ function estFloorLevel() {
     return Math.max(labelCnaeLevel(getEstablishment()), labelCnaeLevel(estById(state.sub)), segmentLevel())
 }
 
+/* Asilo (e afins): Risco III fixo pelo Art. 6º, VI — vale mesmo com CNAEs informados */
+function estR3Fixo() {
+    const e = getEstablishment(),
+        t = estById(state.sub);
+    return e && e.r3Fixo ? e : t && t.r3Fixo ? t : null
+}
+
 function estCnaeR3() {
+    if (estR3Fixo()) return !0;
     if (Array.isArray(state.cnaes) && state.cnaes.length) return 3 === estFloorLevel();
     const e = getEstablishment(),
         t = estById(state.sub);
@@ -4764,11 +4870,13 @@ function riskReasonText(e) {
         const e = t.cnaes.filter(e => (cnaeInfo(e)?.level || 1) === i).map(cnaeFormat).join(", ");
         i >= 2 && n.push("o CNAE " + e + " consta como Risco " + (3 === i ? "III" : "II") + " para o CBMPE no Anexo II do Decreto nº 52.005/2021")
     } else {
-        const e = [o, estById(t.sub)].find(e => e && (e.cnaeR3 || e.cnaeR2));
+        const e = [o, estById(t.sub)].find(e => e && !e.r3Fixo && (e.cnaeR3 || e.cnaeR2));
         e ? (i = e.cnaeR3 ? 3 : 2, n.push(e.label + " (CNAE " + (e.cnaeR3 || e.cnaeR2) + ") consta como Risco " + (e.cnaeR3 ? "III" : "II") + " no Anexo II do Decreto nº 52.005/2021")) : t.segment && segmentOptions(t.establishment)[t.segment - 1] && segmentOptions(t.establishment)[t.segment - 1][1] >= 2 && (i = segmentOptions(t.establishment)[t.segment - 1][1], n.push("o segmento \"" + segmentOptions(t.establishment)[t.segment - 1][0] + "\" tem atividades de Risco " + (3 === i ? "III" : "II") + " no Anexo II (confirme o CNAE)"))
     }
+    const fx = [o, estById(t.sub)].find(e => e && e.r3Fixo);
+    fx && (i = 3, n.push(fx.r3Fixo));
     const s = !(!a.condominio || !a.unidadeTerrea);
-    return "R3" === t.risk ? ((a.areaPropriaAlta || a.predioGrandeArea && !s) && n.push("área construída acima de 930m² (Art. 6º, I)"), a.predioGrandePavimentos && !s && n.push("mais de 3 pavimentos (Art. 6º, II)"), a.lotacaoAlta && n.push("lotação acima de 100 pessoas ou mais de 40 leitos (Art. 6º, III e IV)"), a.hospRestrito && n.push("pacientes com locomoção restrita (Art. 6º, VI)"), a.gasAlto && n.push("gases, líquidos inflamáveis ou produtos perigosos acima dos limites (Art. 6º, V, VIII, X, XI e XII)"), (a.eventoControleAcesso || a.eventoAreaGrande || a.eventoArquibancada) && n.push("evento com controle de acesso, área acima de 930m² ou camarotes/arquibancadas (Art. 6º, XIV e XV)"), n.length ? n.join("; ") : "critérios do Art. 6º do Decreto nº 52.005/2021") : "R2" === t.risk ? s && (a.predioGrandeArea || a.predioGrandePavimentos) ? "unidade térrea independente dentro de edificação maior (Art. 7º, § 3º)" : i >= 2 ? n.join("; ") + " — não pode ser dispensado" : a.eventoTemp ? "evento temporário — não pode ser dispensado (Art. 5º, VII, m)" : "não se enquadra na dispensa (Art. 5º) nem nos critérios de Risco III (Art. 6º) — Art. 7º do Decreto nº 52.005/2021" : "R1" === t.risk ? "atende às condições de dispensa do Art. 5º do Decreto nº 52.005/2021" : "não avaliado"
+    return "R3" === t.risk ? ((a.areaPropriaAlta || a.predioGrandeArea && !s) && n.push("área construída acima de 930m² (Art. 6º, I)"), a.predioGrandePavimentos && !s && n.push("mais de 3 pavimentos (Art. 6º, II)"), a.lotacaoAlta && n.push("lotação acima de 100 pessoas ou mais de 40 leitos (Art. 6º, III e IV)"), a.hospRestrito && !fx && n.push("pacientes com locomoção restrita (Art. 6º, VI)"), a.gasAlto && n.push("gases, líquidos inflamáveis ou produtos perigosos acima dos limites (Art. 6º, V, VIII, X, XI e XII)"), (a.eventoControleAcesso || a.eventoAreaGrande || a.eventoArquibancada) && n.push("evento com controle de acesso, área acima de 930m² ou camarotes/arquibancadas (Art. 6º, XIV e XV)"), n.length ? n.join("; ") : "critérios do Art. 6º do Decreto nº 52.005/2021") : "R2" === t.risk ? s && (a.predioGrandeArea || a.predioGrandePavimentos) ? "unidade térrea independente dentro de edificação maior (Art. 7º, § 3º)" : i >= 2 ? n.join("; ") + " — não pode ser dispensado" : a.eventoTemp ? "evento temporário — não pode ser dispensado (Art. 5º, VII, m)" : "não se enquadra na dispensa (Art. 5º) nem nos critérios de Risco III (Art. 6º) — Art. 7º do Decreto nº 52.005/2021" : "R1" === t.risk ? "atende às condições de dispensa do Art. 5º do Decreto nº 52.005/2021" : "não avaliado"
 }
 /* ---------- respostas e código do questionário ---------- */
 const LEGACY_SCHEMA = "isRisco1,tendaToldo,isRiscoArt5VII,areaPropriaAlta,predioGrandeArea,predioGrandePavimentos,gasAlto,lotacaoAlta,hospRestrito,eventoTemp,eventoControleAcesso,eventoAreaGrande,eventoArquibancada,pessoaFisica,mei,procuracao,condominio,condominioPci,unidadeTerrea,publico,publicoLocado,historico,camaraFria,glp,gn,gnv,elevador,gerador,spda,casaNoturna,palco,postoGnv,trio,termo,termoProjetoPendente,alteracao,evento,eventoPermanente,recurso,termoPermissao,rvt,laudo,complementares,atestadoCondominio".split(","),
@@ -5003,7 +5111,8 @@ function describeAnswers(e) {
 function buildWhatsAppLink(e, t) {
     const a = e && e.v2 ? e : answersFromLiveState(),
         o = encodeAnswerCode(a),
-        n = "Olá! Sou " + (t || a.userName || state.userName || "Visitante") + ". Fiz a simulação " + ("rapida" === a.mode ? "rápida" : "completa") + " no site da Sá Moraes." + (a.cnaes && a.cnaes.length ? " CNAE(s): " + a.cnaes.map(cnaeFormat).join(", ") + "." : "") + " Código: " + o + ". O código contém todas as respostas da simulação e permite que a Sá Moraes as reconstrua. Gostaria de atendimento sobre meu caso.";
+        sc = scenarioInfo(docsScenario(a)),
+        n = "Olá! Sou " + (t || a.userName || state.userName || "Visitante") + "." + (sc ? " Fiz uma consulta no site da Sá Moraes. Caso: " + sc.subject + "." : " Fiz a simulação " + ("rapida" === a.mode ? "rápida" : "completa") + " no site da Sá Moraes.") + (a.cnaes && a.cnaes.length ? " CNAE(s): " + a.cnaes.map(cnaeFormat).join(", ") + "." : "") + " Código: " + o + ". O código contém todas as respostas da simulação e permite que a Sá Moraes as reconstrua. Gostaria de atendimento sobre meu caso.";
     return "https://wa.me/5581997460029?text=" + encodeURIComponent(n)
 }
 
@@ -5383,8 +5492,11 @@ async function askRisk() {
         if (await addChatBubble("Ou clicar em <span class='chat-inline-icon'>&#8635;</span> para reiniciar o chatbot (dentro do botão <span class='chat-inline-icon'>...</span>)."), e !== chatEpoch) return;
         if (await announceStageIfNeeded("risk"), e !== chatEpoch) return
     }
-    const a = estCnaeText();
-    if (a && estCnaeR3()) {
+    const a = estCnaeText(),
+        fx = estR3Fixo();
+    if (fx) {
+        if (markStepStart(), revealMobileRiskHeader(), chatR3LockNoticeShown = !0, await addChatBubble("Como você indicou <strong>" + fx.label + "</strong> — local cujos pacientes ou residentes necessitam de cuidados especiais que dificultam a locomoção —, o estabelecimento é <strong>Risco III (Alto)</strong>. As próximas perguntas servem para definir os documentos necessários.", !0, void 0, "Art. 6º, VI do Decreto Estadual nº 52.005/2021."), e !== chatEpoch) return
+    } else if (a && estCnaeR3()) {
         if (markStepStart(), revealMobileRiskHeader(), chatR3LockNoticeShown = !0, await addChatBubble("Como você indicou <strong>" + a.label + "</strong> — atividade que, pelo CNAE " + a.cnae + ", consta como <strong>Risco III</strong> para o Corpo de Bombeiros no Anexo II do Decreto Estadual nº 52.005/2021 —, o estabelecimento provavelmente é <strong>Risco III (Alto)</strong>. As próximas perguntas servem para definir os documentos necessários. Confirme o CNAE da sua empresa com um técnico da Sá Moraes Engenharia.", !0, void 0, "Art. 6º, caput e Anexo II do Decreto Estadual nº 52.005/2021."), e !== chatEpoch) return
     } else if (a && (getEstablishment()?.cnaeR2 || estById(state.sub)?.cnaeR2)) {
         if (markStepStart(), await addChatBubble("Como você indicou <strong>" + a.label + "</strong> — atividade que, pelo CNAE " + a.cnae + ", consta como <strong>Risco II</strong> para o Corpo de Bombeiros no Anexo II do Decreto Estadual nº 52.005/2021 —, o estabelecimento <strong>não pode ser dispensado de AVCB (Risco I)</strong>. As próximas perguntas verificam se ele é Risco II ou III.", !0, void 0, "Art. 5º, caput, e Art. 6º, caput e Anexo II do Decreto Estadual nº 52.005/2021."), e !== chatEpoch) return
@@ -5671,7 +5783,8 @@ async function finishArt5VII(e) {
         return state.conditions.isRiscoArt5VII = !1, state.conditions.tendaToldo = !1, syncConditionalState(), stageAnsweredCount.risk = Math.max(stageAnsweredCount.risk, 1), persist(), renderAll(), void advanceRisk()
     }
     if (await addChatBubble(DDLCB_MSG), e !== chatEpoch) return;
-    await addResultDisclaimer(), state.conditions.isRiscoArt5VII = !!c, state.conditions.tendaToldo = !c && r, syncConditionalState(), persist(), renderAll(), hideProgressRuler(), CNAE_EXTRA_ESTABS.has(state.establishment) && !state.cnaesAsked ? offerCnaeR1() : askToContact("Requerimento para emissão da DDLCB")
+    if (state.conditions.isRiscoArt5VII = !!c, state.conditions.tendaToldo = !c && r, syncConditionalState(), persist(), renderAll(), hideProgressRuler(), await addResultDisclaimer(), e !== chatEpoch) return;
+    CNAE_EXTRA_ESTABS.has(state.establishment) && !state.cnaesAsked ? offerCnaeR1() : askToContact("Requerimento para emissão da DDLCB")
 }
 /* ---------- critérios do Art. 6º um a um (área acima de 200m² ou sem dispensa) ---------- */
 async function advanceRisk() {
@@ -5770,13 +5883,15 @@ async function casaRiscoFinish(e) {
         return void startCondPhase()
     }
     if (await addChatBubble(DDLCB_MSG), e !== chatEpoch) return;
-    await addResultDisclaimer(), state.conditions.isRisco1 = !0, syncConditionalState(), persist(), renderAll(), hideProgressRuler(), askToContact("Requerimento para emissão da DDLCB")
+    if (state.conditions.isRisco1 = !0, syncConditionalState(), persist(), renderAll(), hideProgressRuler(), await addResultDisclaimer(), e !== chatEpoch) return;
+    askToContact("Requerimento para emissão da DDLCB")
 }
 async function art5FinishR1(e) {
     if (e !== chatEpoch) return;
     if (estFloorLevel() >= 2) return state.conditions.noneRisk = !0, syncConditionalState(), void finishRiskPhase();
     if (state.conditions.isRisco1 = !0, syncConditionalState(), persist(), renderAll(), await addChatBubble(DDLCB_MSG), e !== chatEpoch) return;
-    await addResultDisclaimer(), hideProgressRuler(), askToContact("Requerimento para emissão da DDLCB")
+    if (hideProgressRuler(), await addResultDisclaimer(), e !== chatEpoch) return;
+    askToContact("Requerimento para emissão da DDLCB")
 }
 
 /* ---------- fluxos especiais do Art. 5º (com identificador de pergunta) ---------- */
@@ -5828,7 +5943,7 @@ function askArt5AmbulanteColetivo(e) {
             await addChatBubble("Então as próximas perguntas são sobre o <strong>espaço inteiro</strong>: a área usada pelos food trucks, barracas e estruturas de apoio."), e === chatEpoch && ("rapida" === state.mode ? rapidArea(e) : askCondominioPreArea(e))
         }],
         ["Não", async e => {
-            await addChatBubble("Então quem regulariza o AVCB é o <strong>organizador do espaço</strong>. Procure-o para confirmar que o espaço está regularizado."), e === chatEpoch && (hideProgressRuler(), askToContact("AVCB de espaço com food trucks ou barracas (food park, feira ou evento)"))
+            await addChatBubble("Então quem regulariza o AVCB é o <strong>organizador do espaço</strong>. Procure-o para confirmar que o espaço está regularizado."), e === chatEpoch && (hideProgressRuler(), askToContact("AVCB de espaço com food trucks ou barracas (food park, feira ou evento)", !1, "foodpark"))
         }]
     ], "C09")
 }
@@ -6143,19 +6258,19 @@ function chatPhaseLabelFor(e) {
 }
 
 function docsButton(e, t, a = "Documentos AVCB") {
-    const o = el("div", "chat-cta-container"),
+    const o = el("div", "chat-cta-container chat-docs-cta"),
         n = el("button", "btn btn-primary", a);
-    n.type = "button", n.onclick = () => openDocsModal([...(chatFinishRec || e).entries()], {
+    o.dataset.sig = docsSig(e, t), o.dataset.sc = (docsScenario(t) || {}).id || "", n.type = "button", n.onclick = () => openDocsModal([...(chatFinishRec || e).entries()], {
         printRec: chatFinishRec || e,
         answers: chatFinishAnswers || t
     }), o.append(n), chatMessages.append(o), scrollToBottom()
 }
 
-function whatsButton(e) {
+function whatsButton(e, h) {
     const t = el("div", "chat-cta-container"),
         a = el("a", "btn", "Falar com técnico");
-    a.href = buildWhatsAppLink(e), a.onclick = () => {
-        a.href = buildWhatsAppLink(chatFinishAnswers || e)
+    a.href = h || buildWhatsAppLink(e), a.onclick = () => {
+        a.href = h || buildWhatsAppLink(chatFinishAnswers || e)
     }, a.target = "_blank", a.rel = "noopener", a.style.border = "1px solid var(--green)", a.style.background = "#fff", a.style.color = "var(--green)", a.style.textDecoration = "none", a.style.display = "flex", a.style.alignItems = "center", a.style.justifyContent = "center", a.style.width = "100%", a.style.textAlign = "center", t.append(a), chatMessages.append(t), scrollToBottom()
 }
 /* Avisos que se aplicam ao resultado */
@@ -6186,12 +6301,7 @@ async function finishChat() {
     if (n && (await addChatBubble("Pelas suas respostas, o seu estabelecimento <strong>provavelmente é " + n + "</strong>.<br><small>Por quê: " + plainReason(riskReasonText(state)) + ".</small>", !0, void 0, "Motivo com base legal: " + riskReasonText(state) + "."), e !== chatEpoch)) return;
     for (const t of resultWarnings())
         if (await addChatBubble("<strong>Atenção:</strong> " + t), e !== chatEpoch) return;
-    if (0 === t.size) await addChatBubble("Nenhum documento foi associado às escolhas atuais.");
-    else {
-        if (await addChatBubble("O checklist orientativo de documentos está disponível no botão abaixo. Ele não é exaustivo: o Corpo de Bombeiros pode exigir outros documentos conforme o caso."), e !== chatEpoch) return;
-        if (docsButton(t, a), await addChatBubble("Envie o PDF gerado em <button type='button' class='chat-inline-link-btn chat-inline-docs-open'>Documentos AVCB</button> para acelerar seu processo."), e !== chatEpoch) return;
-        if (await addChatBubble("Salve o Código do Questionário disponível em <button type='button' class='chat-inline-link-btn chat-inline-docs-open'>Documentos AVCB</button> para sempre gerar o PDF dos Documentos AVCB."), e !== chatEpoch) return
-    }
+    if (retireDocsCta(), await ensureDocsShown(), e !== chatEpoch) return;
     if (await addResultDisclaimer(), e !== chatEpoch) return;
     if (await addChatBubble("Clique no botão abaixo para entrar em contato com um técnico da Sá Moraes Engenharia e dar continuidade à validação do seu AVCB."), e !== chatEpoch) return;
     whatsButton(a), ("R2" === state.risk || "R3" === state.risk) && await offerDeepDive(e, t, a)
@@ -6262,8 +6372,7 @@ async function askDeepDiveGroup(e) {
             state.pairs = collectPairs(), persist();
             const r = computeRecommended(),
                 c = answersFromLiveState();
-            if (chatFinishRec = r, chatFinishAnswers = c, await addChatBubble("Obrigado! Atualizei a lista de documentos com base nas novas respostas."), e !== chatEpoch) return;
-            docsButton(r, c, "Documentos AVCB atualizados")
+            if (chatFinishRec = r, chatFinishAnswers = c, "same" === await ensureDocsShown() && e === chatEpoch) await addChatBubble("Obrigado! A lista de documentos não mudou com essas respostas.")
         };
     n(), chatMultiSelectConfirm = i
 }
@@ -6276,6 +6385,8 @@ async function offerCnaeR1() {
             ["Sim, informar CNAE", !0],
             ["Não, obrigado", !1]
         ],
+        /* registra a resposta no histórico para o botão Voltar reabrir esta pergunta (01/10/2026) */
+        replay: () => offerCnaeR1(),
         onPick: e => {
             e ? askCnaeExtra("r1") : askToContact("Requerimento para emissão da DDLCB")
         }
@@ -6347,17 +6458,33 @@ async function applyCnaes(e, t) {
         },
         c = e.map(e => cnaeFormat(e) + " (" + (cnaeInfo(e) ? "Risco " + ["", "I", "II", "III"][cnaeInfo(e).level] + " para o CBMPE" : "fora dos Anexos I e II") + ")").join(", ");
     if (await addChatBubble(o !== s ? "⚠️ <strong>O nível de risco foi alterado</strong> de <strong>" + r[o] + "</strong> para <strong>" + r[s] + "</strong> com o acréscimo do(s) CNAE(s): " + c + ".<br><small>Motivo: " + riskReasonText(state) + ".</small>" : "✅ <strong>O nível de risco não foi alterado</strong> com o acréscimo do(s) CNAE(s): " + c + ". Continua <strong>" + r[s] + "</strong>.<br><small>Motivo: " + riskReasonText(state) + ".</small>", !0, void 0, "Anexos I e II do Decreto Estadual nº 52.005/2021 (redação do Decreto nº 61.082/2026)."), a !== chatEpoch) return;
-    if ("R1" === s) return await addChatBubble(DDLCB_MSG), void(a === chatEpoch && askToContact("Requerimento para emissão da DDLCB"));
+    if ("R1" === s) return "R1" !== o && await addChatBubble(DDLCB_MSG), void(a === chatEpoch && askToContact("Requerimento para emissão da DDLCB"));
     if ("R1" === o) return await addChatBubble("Como o risco mudou, vou fazer algumas perguntas sobre o estabelecimento para montar a lista de documentos."), void(a === chatEpoch && (chatInputArea.style.display = "flex", art5vii.gasDone ? startCondPhase() : askGasBlock(() => startCondPhase(), !1)));
     state.pairs = collectPairs(), persist();
     const d = computeRecommended(),
         l = answersFromLiveState();
-    chatFinishRec = d, chatFinishAnswers = l, docsButton(d, l, "Documentos AVCB atualizados"), "extras" === t && askDeepDiveGroup(chatEpoch)
+    chatFinishRec = d, chatFinishAnswers = l, "extras" === t ? askDeepDiveGroup(chatEpoch) : ensureDocsShown()
 }
 /* ---------- lista de documentos: base legal ---------- */
+function renderDocsModalScenario(e) {
+    const t = $("#docsModalList"),
+        a = scenarioInfo(e);
+    t.replaceChildren(), $("#docsModalTitle").textContent = a.title + " (" + a.docs.length + ")";
+    const o = el("div", "doc-result-card");
+    o.innerHTML = "<div class='doc-detail' style='margin-top:0'>" + a.intro + "</div><div class='doc-detail'><strong>Base legal:</strong> " + a.legal + "</div>", t.append(o), a.docs.forEach(([e, o]) => {
+        const n = el("div", "doc-result-card"),
+            i = el("div", "doc-title");
+        i.insertAdjacentHTML("beforeend", e), i.append(el("span", "doc-badge doc-badge-especifico", "Anexo D")), n.append(i), o && n.append(el("div", "doc-detail", o)), n.append(el("div", "doc-detail", "Base legal: " + a.legal)), t.append(n)
+    }), a.notes.length && (t.append(Object.assign(el("div", "doc-result-card doc-pending-card"), {
+        innerHTML: "<div class='doc-title'>Atenção</div><ul style='margin:6px 0 0; padding-left:20px'>" + a.notes.map(e => "<li>" + e + "</li>").join("") + "</ul>"
+    })))
+}
+
 function renderDocsModalList(e) {
     const t = $("#docsModalList"),
-        a = docsModalAnswers && docsModalAnswers.risk || state.risk;
+        a = docsModalAnswers && docsModalAnswers.risk || state.risk,
+        sc = docsScenario(docsModalAnswers);
+    if (sc) return void renderDocsModalScenario(sc);
     t.replaceChildren(), $("#docsModalTitle").textContent = ("rapida" === docsModalAnswers?.mode ? "Documentos que já dá para saber — lista incompleta (" : "Lista de documentos — pode não estar completa (") + e.length + ")", e.length ? groupDocEntries(e).forEach(([e, o]) => {
         const n = docById[e];
         if (!n) return;
@@ -6380,7 +6507,9 @@ function renderDocsModalList(e) {
             }
         }
         o.reasons?.length && c.append(el("div", "doc-detail", "Motivo: " + o.reasons.join(" • "))), t.append(c)
-    }) : t.append(el("div", "recommendation-empty", "Nenhum documento foi associado a este código/resposta."));
+    }) : t.append(Object.assign(el("div", "doc-result-card"), {
+        innerHTML: "<div class='doc-detail' style='margin-top:0'>" + DOCS_EMPTY_TEXT + "</div>"
+    }));
     const pn = rapidPendingFor(docsModalAnswers).filter(e => e.cat);
     if (pn.length) {
         const e = el("div", "doc-result-card doc-pending-card");
@@ -6429,6 +6558,7 @@ async function rapidStart() {
     if (chatState = "RISK", resetProgressTracking(), await addChatBubble(timeEstimateMessage()), e !== chatEpoch) return;
     if (isEventEstab()) return void rapidEvent(e);
     if (ART5_SPECIAL_FLOWS[t.id]) return void ART5_SPECIAL_FLOWS[t.id](e);
+    if (estR3Fixo()) return void rapidResult(e, "R3", estR3Fixo().r3Fixo);
     if (estCnaeR3()) {
         const a = estCnaeText();
         return void rapidResult(e, "R3", a ? a.label + " (CNAE " + a.cnae + ") consta como Risco III no Anexo II do Decreto nº 52.005/2021" : "atividade de Risco III")
@@ -6607,18 +6737,17 @@ async function rapidResult(e, t, a, o = []) {
     if (l.length) {
         if (await addChatBubble("<strong>O que ainda pode mudar esse resultado:</strong><ul style='margin:4px 0 6px; padding-left:20px'>" + l.map(e => "<li>" + e.q + ".</li>").join("") + "</ul><small><strong>A lista de documentos ainda está incompleta.</strong> Dependendo dessas respostas, o Corpo de Bombeiros pode pedir outros.</small>"), e !== chatEpoch) return
     } else if (await addChatBubble("Esta é uma estimativa rápida, com os <strong>documentos básicos</strong>. Para confirmar, faça a análise completa."), e !== chatEpoch) return;
-    if (await addResultDisclaimer(), e !== chatEpoch) return;
-    docsButton(i, s), whatsButton(s), rapidOptions(l.length > 0)
+    if (retireDocsCta(), docsButton(i, s), await addResultDisclaimer(), e !== chatEpoch) return;
+    if (await addChatBubble("Este é um resultado preliminar. Para confirmar o nível de risco e a lista de documentos, fale com um técnico pelo botão abaixo."), e !== chatEpoch) return;
+    whatsButton(s), rapidOptions(l.length > 0)
 }
 
 function rapidOptions(e) {
-    chatInputArea.style.display = "flex", chatInput.disabled = !1, clearChatOptions(), addChatOption(e ? "📋 Responder as perguntas que faltam (≈3 min)" : "📋 Fazer a análise completa", () => rapidToComplete()), addChatOption("📄 Gerar PDF", () => printChecklist(chatFinishRec || computeRecommended(), chatFinishAnswers || answersFromLiveState())), addChatOption("💬 Falar com técnico", () => {
-        window.open(buildWhatsAppLink(chatFinishAnswers || answersFromLiveState()), "_blank", "noopener")
-    })
+    chatInputArea.style.display = "flex", chatInput.disabled = !1, clearChatOptions(), addChatOption(e ? "📋 Responder as perguntas que faltam (≈3 min)" : "📋 Fazer a análise completa", () => rapidToComplete(), "chat-sugg"), addChatOption("📄 Gerar PDF", () => printChecklist(chatFinishRec || computeRecommended(), chatFinishAnswers || answersFromLiveState()), "chat-sugg")
 }
 async function rapidToComplete() {
     const e = chatEpoch;
-    clearChatOptions(), await addChatBubble("Completar a análise", !1), state.mode = "completa";
+    clearChatOptions(), retireDocsCta(), await addChatBubble("Completar a análise", !1), state.mode = "completa";
     const t = state.rapidPre || {};
     state.conditions = {
         ...defaultConditions
@@ -6652,7 +6781,7 @@ async function startAlteracao() {
                     if (o) return await addChatBubble("Nesse caso <strong>não cabe a alteração</strong> do AVCB: é preciso um <strong>processo novo</strong>. Vamos fazer a análise para descobrir os documentos."), void(e === chatEpoch && (state.userName ? showEstabPrompt() : (chatState = "NAME", Q("C01"), await addChatBubble("Qual é o seu nome?"), chatInput.disabled = !1, chatInput.placeholder = "Digite o seu nome...", chatInput.focus())));
                     const n = a.includes("cnpj") ? "<li>A troca de CNPJ só é aceita com o <strong>mesmo CNAE</strong> principal e os <strong>mesmos responsáveis</strong> no contrato social.</li>" : "",
                         i = a.includes("area") ? "<li>A correção de área só é aceita se não mudar o valor da taxa de vistoria nem os sistemas preventivos.</li>" : "";
-                    await addChatBubble("Então é uma <strong>alteração de dados do AVCB vigente</strong>, sem nova vistoria e sem nova taxa de vistoria (NT 1.01, item 5.13). O pedido é feito ao CAT da região, pelo modelo do <strong>Anexo D</strong>. Documentos:<ul style='margin:4px 0 0; padding-left:20px'><li>Requerimento de correção de AVCB (Anexo D da NT 1.01)</li><li>RG e CPF do requerente</li><li>Ficha imobiliária do imóvel</li><li>Comprovante de inscrição e situação cadastral (CNPJ)</li><li>Comprovante de pagamento do DAE-20 (complementar), quando houver</li><li>Procuração, se o pedido for feito por procurador</li></ul><strong>Atenção:</strong><ul style='margin:4px 0 0; padding-left:20px'>" + n + i + "<li>O novo AVCB mantém o <strong>mesmo vencimento</strong> do AVCB original (item 5.13.3).</li></ul>", !0, void 0, "NT 1.01, itens 5.13.1 a 5.13.3 e Anexo D."), e === chatEpoch && askToContact("pedido de alteração de dados do AVCB (Anexo D)")
+                    await addChatBubble("Então é uma <strong>alteração de dados do AVCB vigente</strong>, sem nova vistoria e sem nova taxa de vistoria (NT 1.01, item 5.13). O pedido é feito ao CAT da região, pelo modelo do <strong>Anexo D</strong>. Documentos:<ul style='margin:4px 0 0; padding-left:20px'><li>Requerimento de correção de AVCB (Anexo D da NT 1.01)</li><li>RG e CPF do requerente</li><li>Ficha imobiliária do imóvel</li><li>Comprovante de inscrição e situação cadastral (CNPJ)</li><li>Comprovante de pagamento do DAE-20 (complementar), quando houver</li><li>Procuração, se o pedido for feito por procurador</li></ul><strong>Atenção:</strong><ul style='margin:4px 0 0; padding-left:20px'>" + n + i + "<li>O novo AVCB mantém o <strong>mesmo vencimento</strong> do AVCB original (item 5.13.3).</li></ul>", !0, void 0, "NT 1.01, itens 5.13.1 a 5.13.3 e Anexo D."), e === chatEpoch && askToContact("pedido de alteração de dados do AVCB (Anexo D)", !1, "anexoD")
                 }
             })
         }
@@ -6995,43 +7124,19 @@ async function copyTextToClipboard(e) {
     }
 }
 
-function presentWhatsAppButton(e, t = 5) {
-    return new Promise(a => {
-        const o = el("div", "chat-cta-container"),
-            n = el("button", "chat-wpp-cta", "");
-        n.type = "button", n.disabled = !0;
-        let i = t;
-        const s = () => {
-            i > 0 ? n.innerHTML = 'Aguarde para falar com o técnico <span class="chat-wpp-cta-count">' + i + "</span>" : n.textContent = "Falar com o técnico no WhatsApp"
-        };
-        s(), o.append(n), chatMessages.append(o), scrollToBottom(), n.addEventListener("click", () => {
-            n.disabled || window.open(e, "_blank", "noopener")
-        });
-        const r = setInterval(() => {
-            i -= 1, i <= 0 ? (clearInterval(r), i = 0, n.disabled = !1, s(), a()) : s()
-        }, 1e3)
-    })
-}
-async function askToContact(e, t = !1) {
+async function askToContact(e, t = !1, k = "") {
     const a = chatEpoch;
-    chatState = "CONTACT", chatInputArea.style.display = "flex", chatInput.disabled = !1, chatInput.value = "", chatInput.placeholder = "", chatInput.focus(), clearChatOptions();
-    const o = `https://wa.me/5581997460029?text=${encodeURIComponent(t?"Olá, vim do site AVCB Pernambuco e gostaria de mais informações a respeito da minha documentação.":`Olá, vim do site AVCB Pernambuco e gostaria de mais informações a respeito do ${e}.`)}`,
-        n = `<a href="${o}" target="_blank" rel="noopener">técnico da Sá Moraes Engenharia</a>`;
-    let i = t ? `Gostaria de entrar em contato com um ${n} para mais informações sobre a sua documentação?` : `Gostaria de entrar em contato com um ${n} para mais informações sobre o ${e}?`;
+    if (chatState = "CONTACT", chatInputArea.style.display = "flex", chatInput.disabled = !1, chatInput.value = "", chatInput.placeholder = "", chatInput.focus(), clearChatOptions(), await ensureDocsShown(), a !== chatEpoch) return;
+    /* O botão do técnico aparece no "Sim" e no "Não"; a mensagem do WhatsApp leva o código do questionário (e o caso, quando houver) */
+    const w = () => whatsButton(chatFinishAnswers || answersFromLiveState()),
+        nao = {
+            foodpark: "Tudo bem! Se você for o organizador do espaço, ou quiser ajuda para confirmar se ele está regularizado, fale com um técnico pelo botão abaixo.",
+            anexoD: "Tudo bem! A Sá Moraes Engenharia pode preparar e protocolar o pedido de alteração por você. Se precisar, fale com um técnico pelo botão abaixo."
+        } [k] || "Tudo bem! O checklist foi concluído. Para qualquer dúvida ou necessidade sobre a segurança contra incêndio do seu estabelecimento, fale com um técnico pelo botão abaixo.";
+    let i = t ? "Gostaria de entrar em contato com um técnico da Sá Moraes Engenharia para mais informações sobre a sua documentação?" : `Gostaria de entrar em contato com um técnico da Sá Moraes Engenharia para mais informações sobre o ${e}?`;
     await addChatBubble(i), a === chatEpoch && (addChatOption("Sim", async () => {
-        clearChatOptions(), await addChatBubble("Sim", !1), chatInputArea.style.display = "none", chatState = "DONE";
-        const e = computeRecommended();
-        if (e.size > 0) {
-            const t = answersFromLiveState();
-            chatFinishRec = e, chatFinishAnswers = t, await addChatBubble("O checklist orientativo de documentos está disponível no botão abaixo. Ele não é exaustivo: o Corpo de Bombeiros pode exigir outros documentos conforme o caso.");
-            const a = el("div", "chat-cta-container"),
-                o = el("button", "btn btn-primary", "Documentos AVCB");
-            o.type = "button", o.onclick = () => openDocsModal([...(chatFinishRec || e).entries()], {
-                printRec: chatFinishRec || e,
-                answers: chatFinishAnswers || t
-            }), a.append(o), chatMessages.append(a), scrollToBottom(), await addChatBubble("Envie o PDF gerado em <button type='button' class='chat-inline-link-btn chat-inline-docs-open'>Documentos AVCB</button> para acelerar seu processo."), await addChatBubble("Salve o Código do Questionário disponível em <button type='button' class='chat-inline-link-btn chat-inline-docs-open'>Documentos AVCB</button> para sempre gerar o PDF dos Documentos AVCB.")
-        }
-        await presentWhatsAppButton(o), await addChatBubble("Gostaria de fazer uma outra análise de AVCB?"), chatState = "RESTART", chatInputArea.style.display = "flex", chatInput.disabled = !1, chatInput.value = "", chatInput.placeholder = "", chatInput.focus(), clearChatOptions(), addChatOption("Sim", async () => {
+        if (clearChatOptions(), await addChatBubble("Sim", !1), chatInputArea.style.display = "none", chatState = "DONE", !await addChatBubble(t ? "Clique no botão abaixo para falar com um técnico da Sá Moraes Engenharia sobre a sua documentação." : `Clique no botão abaixo para falar com um técnico da Sá Moraes Engenharia sobre o ${e}.`)) return;
+        w(), await addChatBubble("Gostaria de fazer uma outra análise de AVCB?"), chatState = "RESTART", chatInputArea.style.display = "flex", chatInput.disabled = !1, chatInput.value = "", chatInput.placeholder = "", chatInput.focus(), clearChatOptions(), addChatOption("Sim", async () => {
             clearChatOptions(), await addChatBubble("Sim", !1), state.establishment = "", state.risk = "", state.conditions = {
                 ...defaultConditions
             }, persist(), location.reload()
@@ -7039,7 +7144,7 @@ async function askToContact(e, t = !1) {
             clearChatOptions(), await addChatBubble("Não", !1), chatInputArea.style.display = "none", chatState = "DONE", await addChatBubble("A Sá Moraes está sempre à disposição. Até logo.")
         })
     }), addChatOption("Não", async () => {
-        clearChatOptions(), await addChatBubble("Não", !1), chatInputArea.style.display = "none", chatState = "DONE", await addChatBubble("Tudo bem! O Checklist foi concluído. Se precisar de algo, estamos à disposição.")
+        clearChatOptions(), await addChatBubble("Não", !1), chatInputArea.style.display = "none", chatState = "DONE", (await addChatBubble(nao)) && w()
     }))
 }
 
@@ -7048,7 +7153,8 @@ function printChecklist(e, t) {
     a.style.display = "none", document.body.appendChild(a);
     const o = a.contentWindow.document;
     o.write("<html><head><title>Documentos para o AVCB - Sá Moraes Engenharia</title>"), o.write("<style>"), o.write("\n    body { font-family: Arial, sans-serif; padding: 20px; color: #333; }\n    .sme-logo { display: block; height: 52px; margin-bottom: 14px; }\n    h1 { color: #101c2b; border-bottom: 2px solid #101c2b; padding-bottom: 10px; }\n    .print-sim-warning { border: 1.5px solid #b45309; background: #fff7ed; color: #7c2d12; padding: 10px 12px; border-radius: 6px; font-size: 0.85em; margin: 10px 0 16px; }\n    .print-pending { border: 1px dashed #8a6517; padding: 12px 15px; border-radius: 8px; margin: 18px 0; page-break-inside: avoid; }\n    .print-pending ul { margin: 6px 0; padding-left: 20px; }\n    .doc-card { border: 1px solid #ccc; padding: 15px; margin-bottom: 15px; border-radius: 8px; page-break-inside: avoid; }\n    .doc-title { font-weight: bold; font-size: 1.1em; margin-bottom: 5px; color: #101c2b; }\n    .doc-detail { font-size: 0.9em; margin-top: 5px; }\n    .doc-reasons { font-size: 0.85em; color: #666; margin-top: 8px; font-style: italic; }\n    .basic { border-left: 5px solid #e5c94d; background: #fff4b8; }\n    .tecnico { border-left: 5px solid #3b82f6; background: #eff6ff; }\n    .art { border-left: 5px solid #f4a6c0; background: rgba(255,182,203,.28); }\n    .tecnico-pci { border-left: 5px solid #3b82f6; border: 2px solid #eab308; background: #eff6ff; }\n    .s2-icon-print { display:inline-block; width:26px; height:14px; margin-right:6px; vertical-align:middle; background: url('data:image/png;base64,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') center/contain no-repeat; }\n    .print-footer { margin-top: 28px; padding-top: 16px; border-top: 2px solid #101c2b; page-break-inside: avoid; }\n    .print-footer-code { font-size: 1.05em; font-weight: bold; }\n    .print-footer-note { font-size: 0.8em; color: #666; margin-top: 2px; }\n    .print-qr-row { display: flex; gap: 28px; margin-top: 14px; flex-wrap: wrap; justify-content: space-between; width: 100%; }\n    .print-qr-item { text-align: center; }\n    .print-qr-item svg { width: 120px; height: 120px; }\n    .print-qr-caption { font-size: 0.78em; margin-top: 4px; color: #333; }\n    .print-header-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }\n    .print-risk-badge { flex: 0 0 auto; min-width: 190px; text-align: center; border-radius: 10px; padding: 10px 16px; page-break-inside: avoid; }\n    .print-risk-badge .print-risk-kicker { font-size: 0.72em; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.85; }\n    .print-risk-badge .print-risk-label { font-size: 1.35em; font-weight: bold; margin-top: 2px; }\n    .print-risk-r1 { background: #eaf7ee; border: 2px solid #c0392b; color: #c0392b; }\n    .print-risk-r2 { background: #fff4b8; border: 2px solid #b98900; color: #7a5b00; }\n    .print-risk-r3 { background: #fdecec; border: 2px solid #b42318; color: #a11f17; }\n    .print-answers-page { page-break-before: always; padding-top: 4px; }\n    .print-answers-page h2 { color: #101c2b; border-bottom: 2px solid #101c2b; padding-bottom: 8px; margin-bottom: 14px; }\n    .print-answers-table { width: 100%; border-collapse: collapse; font-size: 0.88em; }\n    .print-answers-table td { padding: 7px 10px; border-bottom: 1px solid #e2e2dd; vertical-align: top; }\n    .print-answers-table td.print-answers-label { color: #555; width: 45%; }\n    .print-answers-table td.print-answers-value { font-weight: 600; color: #222; }\n    .print-answers-table tr:last-child td { border-bottom: none; }\n  "), o.write('\n/* ===== Desabilitar selecao de texto/imagem e tap highlight ===== */\nhtml, body {\n  -webkit-user-select: none;\n  -moz-user-select: none;\n  -ms-user-select: none;\n  user-select: none;\n}\nimg {\n  -webkit-user-drag: none;\n  user-drag: none;\n  -webkit-touch-callout: none;\n}\ninput, textarea, select, [contenteditable="true"] {\n  -webkit-user-select: text;\n  -moz-user-select: text;\n  -ms-user-select: text;\n  user-select: text;\n}\n* {\n  -webkit-tap-highlight-color: transparent;\n}\nbutton, a, .btn, .btn-primary, .btn-invert, .abtn, .btn-nav,\n.docs-modal-copy-btn, .qr-modal-tab-btn, .chat-back-btn-fixed,\n.chat-mobile-menu-btn, .chat-restart-btn, .chat-send-btn,\n[role="button"] {\n  -webkit-tap-highlight-color: transparent;\n  -webkit-touch-callout: none;\n}\n</style></head><body>');
-    const n = establishments.find(e => e.id === t.establishment)?.label || t.establishment,
+    const SC = scenarioInfo(docsScenario(t)),
+        n = establishments.find(e => e.id === t.establishment)?.label || t.establishment || "Não informado",
         i = {
             R1: {
                 label: "Risco I — Baixo",
@@ -7063,8 +7169,11 @@ function printChecklist(e, t) {
                 cls: "print-risk-r3"
             }
         } [t.risk];
-    o.write('<div class="print-header-row">'), o.write('<div><img src="assets/logo-sme-print.png" class="sme-logo" alt="Sá Moraes Engenharia"><h1>' + ("rapida" === t.mode ? "Resultado rápido — " : "") + 'Documentos para o AVCB — Sá Moraes Engenharia</h1></div>'), i && o.write('<div class="print-risk-badge ' + i.cls + '"><div class="print-risk-kicker">Risco provável' + ("rapida" === t.mode ? " (a confirmar)" : "") + '</div><div class="print-risk-label">' + i.label + "</div></div>"), o.write("</div>"), o.write('<div class="print-sim-warning"><strong>SIMULAÇÃO AUTOMATIZADA — NÃO É LAUDO NEM PARECER TÉCNICO.</strong> O resultado é gerado automaticamente pelas respostas informadas e pode conter erros ou mudar após análise do caso. Antes de protocolar qualquer pedido, confirme as informações com um profissional habilitado e com o CBMPE.<br>' + (t.terms ? termsLine(t.terms) : "O início da simulação exige o aceite dos Termos de Uso vigentes.") + '</div>'), o.write("<p><strong>Nome:</strong> " + ((t.userName || "").trim() || "Não informado") + "</p>"), o.write("<p><strong>Estabelecimento:</strong> " + n + "</p>"), o.write('<div class="print-legend">'), o.write('<div class="print-legend-item"><div class="print-legend-color" style="background: #fff4b8; border-left: 5px solid #e5c94d;"></div><span>B&aacute;sicos</span></div>'), o.write('<div class="print-legend-item"><div class="print-legend-color" style="background: #eff6ff; border-left: 5px solid #3b82f6;"></div><span>T&eacute;cnico (S&aacute; Moraes Engenharia)</span></div>'), o.write('<div class="print-legend-item"><div class="print-legend-color" style="border: 1px solid #ccc;"></div><span>Espec&iacute;ficos</span></div>'), o.write("</div>"), o.write("<h3>Documentos (" + e.size + "):</h3>");
-    const s0 = [...e.entries()],
+    o.write('<div class="print-header-row">'), o.write('<div><img src="assets/logo-sme-print.png" class="sme-logo" alt="Sá Moraes Engenharia"><h1>' + ("rapida" === t.mode ? "Resultado rápido — " : "") + 'Documentos para o AVCB — Sá Moraes Engenharia</h1></div>'), SC ? o.write('<div class="print-risk-badge" style="border:2px solid #101c2b; color:#101c2b;"><div class="print-risk-kicker">Situação</div><div class="print-risk-label">' + SC.badge + "</div></div>") : i && o.write('<div class="print-risk-badge ' + i.cls + '"><div class="print-risk-kicker">Risco provável' + ("rapida" === t.mode ? " (a confirmar)" : "") + '</div><div class="print-risk-label">' + i.label + "</div></div>"), o.write("</div>"), o.write('<div class="print-sim-warning"><strong>SIMULAÇÃO AUTOMATIZADA — NÃO É LAUDO NEM PARECER TÉCNICO.</strong> O resultado é gerado automaticamente pelas respostas informadas e pode conter erros ou mudar após análise do caso. Antes de protocolar qualquer pedido, confirme as informações com um profissional habilitado e com o CBMPE.<br>' + (t.terms ? termsLine(t.terms) : "O início da simulação exige o aceite dos Termos de Uso vigentes.") + '</div>'), o.write("<p><strong>Nome:</strong> " + ((t.userName || "").trim() || "Não informado") + "</p>"), o.write("<p><strong>Estabelecimento:</strong> " + n + "</p>"), SC || (o.write('<div class="print-legend">'), o.write('<div class="print-legend-item"><div class="print-legend-color" style="background: #fff4b8; border-left: 5px solid #e5c94d;"></div><span>B&aacute;sicos</span></div>'), o.write('<div class="print-legend-item"><div class="print-legend-color" style="background: #eff6ff; border-left: 5px solid #3b82f6;"></div><span>T&eacute;cnico (S&aacute; Moraes Engenharia)</span></div>'), o.write('<div class="print-legend-item"><div class="print-legend-color" style="border: 1px solid #ccc;"></div><span>Espec&iacute;ficos</span></div>'), o.write("</div>")), o.write("<h3>Documentos (" + (SC ? SC.docs.length : e.size) + "):</h3>");
+    SC ? (o.write('<div class="doc-card"><div class="doc-detail" style="margin-top:0">' + SC.intro + '</div><div class="doc-detail"><strong>Base legal:</strong> ' + SC.legal + "</div></div>"), SC.docs.forEach(([e, t]) => {
+        o.write('<div class="doc-card"><div class="doc-title">' + e + '</div>' + (t ? '<div class="doc-detail">' + t + "</div>" : "") + '<div class="doc-detail"><strong>Base legal:</strong> ' + SC.legal + "</div></div>")
+    }), SC.notes.length && o.write('<div class="print-pending"><div class="doc-title">Atenção</div><ul>' + SC.notes.map(e => "<li>" + e + "</li>").join("") + "</ul></div>")) : e.size || o.write('<div class="doc-card"><div class="doc-detail" style="margin-top:0">' + DOCS_EMPTY_TEXT + "</div></div>");
+    const s0 = SC ? [] : [...e.entries()],
         sA = sortArtEntries(s0.filter(([e]) => isArtDoc(docById[e]))),
         s = s0.filter(([e]) => !isArtDoc(docById[e])),
         r = s.filter(([e]) => docById[e].tecnico),
@@ -7075,7 +7184,7 @@ function printChecklist(e, t) {
         let n = "doc-card";
         isArtDoc(a) ? n += " art" : a.tecnico ? n += "pci_aprovado" === a.id ? " tecnico-pci" : " tecnico" : t.kinds.includes("basic") && (n += " basic"), o.write('<div class="' + n + '">'), o.write('<div class="doc-title">' + (a.tecnico ? '<span class="s2-icon-print"></span>' : "") + a.title + "</div>"), a.detail && o.write('<div class="doc-detail">' + a.detail + "</div>"), docLegal(a, t.risk) && o.write('<div class="doc-detail"><strong>Base legal:</strong> ' + (function(){ const q = legalLinkify(docLegal(a, t.risk), { abs: !0 }); return q.html + (q.nbr ? '<br><em>© ' + ABNT_NOTICE + '</em>' : ''); })() + "</div>"), o.write('<div class="doc-reasons">Motivo: ' + t.reasons.join(" &bull; ") + "</div>"), o.write("</div>")
     }
-    const pq = rapidPendingFor(t);
+    const pq = SC ? [] : rapidPendingFor(t);
     pq.length && o.write('<div class="print-pending"><div class="doc-title">O que ainda falta saber (pode mudar o resultado)</div><ul>' + pq.map(e => "<li>" + e.q + "</li>").join("") + "</ul>" + (pq.some(e => e.cat) ? "<div class='doc-detail'><strong>Talvez você também precise de:</strong> " + pq.filter(e => e.cat).map(e => e.cat).join("; ") + ".</div>" : "") + "</div>");
     const l = encodeAnswerCode(t),
         u = e => {
@@ -7138,10 +7247,10 @@ function printChecklist(e, t) {
         a.forEach(e => {
             addChatOption(e.label, async () => {
                 chatInput.value = "", clearChatOptions(), await addChatBubble(e.label, !1), onEstabPicked(e)
-            })
+            }, "chat-sugg")
         }), 0 === a.length && addChatOption("Não encontrei — ver lista completa", () => {
             clearChatOptions(), showFullEstablishmentDropdown()
-        })
+        }, "chat-sugg")
     } else {
         const t = e.target.value.trim().toLowerCase();
         chatOptions.querySelectorAll(".chat-option-btn").forEach(e => {
@@ -7458,5 +7567,186 @@ var cb=document.getElementById('chatSrcBtn');if(cb)cb.addEventListener('click',o
 b.addEventListener('click',open);c.addEventListener('click',close);o.addEventListener('click',function(e){if(e.target===o)close()});
 document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!o.hidden){close();e.stopPropagation()}},true);})();
 </script>
+<style id="sme-ajustes-respostas-2026-10-01">
+/* ===== Ajuste 01/10/2026: respostas dentro da conversa =====
+   A) Sugestões: pílulas tracejadas, à direita (lado do usuário)
+   B) Escolha única: cartão com círculos (radio), envia ao tocar
+   C) Escolha múltipla: quadrados (checkbox) + botão "Confirmar (N)"
+   A faixa de baixo fica só com o botão Voltar; os botões originais continuam lá, escondidos,
+   e a conversa mostra uma cópia clicável deles. */
+#chatOptionsScroll{position:absolute!important;width:1px!important;height:1px!important;overflow:hidden!important;clip:rect(0 0 0 0)!important;clip-path:inset(50%)!important;white-space:nowrap!important;padding:0!important;margin:0!important}
+.chat-options .chat-options-more,.chat-options-expanded{display:none!important}
+
+/* --- B) escolha única --- */
+.chat-mirror{animation:fadeIn .3s ease-out}
+.chat-choice{align-self:flex-start;width:min(440px,88%);background:#fff;border:1px solid #c9d3dd;border-radius:16px;border-top-left-radius:4px;padding:12px;box-shadow:0 2px 10px rgba(16,28,43,.06)}
+.chat-choice-hint,.chat-multi-hint{display:flex;align-items:center;gap:8px;margin:0 0 10px;font-size:.72rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.chat-choice-hint strong,.chat-multi-hint strong{color:var(--ink)}
+.chat-hint-ico{flex:0 0 auto;width:14px;height:14px;box-sizing:border-box;border:2px solid var(--ink);display:inline-block;position:relative}
+.chat-hint-ico.radio{border-radius:50%}
+.chat-hint-ico.radio::after{content:"";position:absolute;inset:2px;border-radius:50%;background:var(--ink)}
+.chat-hint-ico.check{border-radius:3px;background:var(--ink)}
+.chat-hint-ico.check::after{content:"";position:absolute;left:3px;top:0;width:3px;height:7px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+.chat-choice-list{display:flex;flex-direction:column;gap:6px}
+.chat-choice-item{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:10px 12px;border:1px solid #d5dde5;border-radius:12px;background:#fff;color:var(--ink);font:inherit;font-size:.86rem;font-weight:600;line-height:1.3;cursor:pointer;transition:background .15s,border-color .15s}
+.chat-choice-item:hover,.chat-choice-item:focus-visible{background:var(--green-soft);border-color:var(--ink);outline:0}
+.chat-choice-dot{flex:0 0 auto;width:20px;height:20px;box-sizing:border-box;border:2px solid #8b96a3;border-radius:50%;position:relative;background:#fff;transition:border-color .15s}
+.chat-choice-item:hover .chat-choice-dot{border-color:var(--ink)}
+.chat-choice-item.is-chosen{background:var(--ink);border-color:var(--ink);color:#fff}
+.chat-choice-item.is-chosen .chat-choice-dot{border-color:#fff}
+.chat-choice-item.is-chosen .chat-choice-dot::after{content:"";position:absolute;inset:3px;border-radius:50%;background:#fff}
+.chat-choice-item:disabled:not(.is-chosen){opacity:.45;cursor:default}
+
+/* --- A) sugestões --- */
+.chat-sugg-wrap{align-self:flex-end;max-width:88%;display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.chat-sugg-hint{font-size:.72rem;font-weight:600;color:var(--muted)}
+.chat-sugg-list{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px}
+.chat-sugg-pill{padding:8px 14px;border:1.5px dashed #b8962e;border-radius:18px;border-bottom-right-radius:4px;background:transparent;color:#735415;font:inherit;font-size:.85rem;font-weight:600;line-height:1.3;text-align:left;cursor:pointer;transition:background .15s,border-color .15s}
+.chat-sugg-pill:hover,.chat-sugg-pill:focus-visible{background:var(--gold-soft);border-style:solid;outline:0}
+.chat-sugg-more{padding:8px 14px;border:1.5px dashed #8b96a3;border-radius:18px;background:transparent;color:var(--muted);font:inherit;font-size:.8rem;font-weight:700;cursor:pointer}
+.chat-sugg-more:hover,.chat-sugg-more:focus-visible{background:var(--green-soft);border-style:solid;outline:0}
+
+/* --- C) escolha múltipla --- */
+.chat-inline-row.chat-multi{flex-direction:column;align-items:stretch;gap:12px}
+.chat-multi .chat-inline-btn,.cnae-picker [aria-multiselectable="true"] .chat-inline-btn{position:relative;padding-left:40px}
+.chat-multi .chat-inline-btn::before,.cnae-picker [aria-multiselectable="true"] .chat-inline-btn::before{content:"";position:absolute;left:12px;top:50%;width:18px;height:18px;margin-top:-9px;box-sizing:border-box;border:2px solid #8b96a3;border-radius:4px;background:#fff}
+.chat-multi .chat-inline-btn.active::before,.cnae-picker [aria-multiselectable="true"] .chat-inline-btn.active::before{border-color:#fff;background:#fff}
+.chat-multi .chat-inline-btn.active::after,.cnae-picker [aria-multiselectable="true"] .chat-inline-btn.active::after{content:"";position:absolute;left:18px;top:50%;width:5px;height:10px;margin-top:-7px;border:solid var(--ink);border-width:0 2.5px 2.5px 0;transform:rotate(45deg)}
+.chat-multi .chat-inline-btn.chat-inline-none{margin-top:0}
+.chat-multi .chat-inline-btn.chat-inline-none.active::after{border-color:#5f6963}
+.chat-multi .chat-inline-none-sep{height:1px;background:#b9c4cf;margin:4px 2px}
+.chat-multi .chat-inline-send-btn{align-self:flex-end;width:auto;height:auto;min-height:40px;margin:0;padding:0 18px;border-radius:999px;gap:6px;font:inherit;font-size:.85rem;font-weight:800;color:#fff}
+.chat-multi .chat-inline-send-btn .cnt{font-weight:600;opacity:.85}
+.chat-multi .chat-inline-send-btn:disabled{background:#b7c0c9;cursor:not-allowed}
+.chat-multi.is-answered .chat-inline-send-btn{display:none}
+.chat-multi-hint.is-answered{opacity:.6}
+
+/* ===== Etapa X de N: faixa fina abaixo do topo, largura total (nunca atrás dos botões) ===== */
+html body.chat-focus .chat-container .chat-header,
+html body.chat-focus .chat-container .chat-header.opened{top:66px!important;height:30px!important;padding:0 16px!important;flex-direction:row!important;justify-content:flex-start!important;align-items:center!important;gap:10px!important;background:#fff!important;border-bottom:1px solid var(--line)!important;z-index:5}
+html body.chat-focus.chat-risk-revealed .chat-container .chat-mobile-topbar{height:96px!important}
+html body.chat-focus .chat-container .chat-header .chat-progress{order:2;flex:1 1 auto!important;min-width:0;text-align:left!important;font-size:.68rem!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:1}
+html body.chat-focus .chat-container .chat-header .chat-mobile-progress-track{order:1;flex:0 0 auto;width:96px!important;margin:0!important;overflow:hidden}
+html body .chat-container .chat-header .chat-mobile-progress-fill{display:none!important}
+.chat-stage-fill{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--gold);transition:width .5s ease}
+.chat-mobile-progress-track::after{content:"";position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(to right,transparent 0,transparent calc(100% / var(--seg,3) - 3px),#fff calc(100% / var(--seg,3) - 3px),#fff calc(100% / var(--seg,3)))}
+@media (max-width:720px){
+html body .chat-container .chat-header,
+html body .chat-container .chat-header.opened{top:66px!important;height:30px!important;padding:0 16px!important;flex-direction:row!important;justify-content:flex-start!important;align-items:center!important;gap:10px!important;background:#fff!important;border-bottom:1px solid var(--line)!important;z-index:5}
+html body.chat-risk-revealed .chat-container .chat-mobile-topbar{height:96px!important}
+html body .chat-container .chat-header .chat-progress{order:2;flex:1 1 auto!important;min-width:0;text-align:left!important;font-size:.68rem!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:1}
+html body .chat-container .chat-header .chat-mobile-progress-track{order:1;flex:0 0 auto;width:80px!important;margin:0!important;overflow:hidden}}
+@media (prefers-reduced-motion:reduce){.chat-mirror{animation:none}.chat-choice-item,.chat-sugg-pill{transition:none}}
+</style>
+
+<script id="sme-ajustes-respostas-js">
+/* Ajuste 01/10/2026 — A) sugestões, B) escolha única e C) escolha múltipla dentro da conversa; faixa de etapa */
+(function(){
+  var scroll=document.getElementById("chatOptionsScroll"),msgs=document.getElementById("chatMessages");
+  if(!scroll||!msgs)return;
+  var box=null,expanded=false,lastLabels="",busy=false;
+  function chips(){return Array.prototype.slice.call(scroll.querySelectorAll(".chat-option-btn"));}
+  function visible(b){return b.style.display!=="none";}
+  function removeBox(){if(box&&box.parentNode)box.parentNode.removeChild(box);box=null;busy=false;}
+  function toBottom(){msgs.scrollTop=msgs.scrollHeight;}
+  function buildChoice(cs){
+    var w=document.createElement("div");w.className="chat-mirror chat-choice";w.setAttribute("role","radiogroup");w.setAttribute("aria-label","Escolha uma opção");
+    w.innerHTML='<div class="chat-choice-hint"><span class="chat-hint-ico radio" aria-hidden="true"></span><span>Escolha <strong>uma</strong> opção</span></div>';
+    var list=document.createElement("div");list.className="chat-choice-list";w.appendChild(list);
+    cs.forEach(function(chip){
+      if(!visible(chip))return;
+      var it=document.createElement("button");it.type="button";it.className="chat-choice-item";it.setAttribute("role","radio");it.setAttribute("aria-checked","false");
+      var d=document.createElement("span");d.className="chat-choice-dot";d.setAttribute("aria-hidden","true");
+      var t=document.createElement("span");t.textContent=chip.textContent;
+      it.appendChild(d);it.appendChild(t);
+      it.addEventListener("click",function(){
+        if(busy)return;busy=true;
+        it.classList.add("is-chosen");it.setAttribute("aria-checked","true");
+        Array.prototype.forEach.call(list.children,function(x){x.disabled=true;});
+        setTimeout(function(){busy=false;if(chip.isConnected)chip.click();},180);
+      });
+      list.appendChild(it);
+    });
+    return w;
+  }
+  function buildSugg(cs){
+    var vis=cs.filter(visible);
+    var w=document.createElement("div");w.className="chat-mirror chat-sugg-wrap";w.setAttribute("aria-label","Sugestões de resposta");
+    w.innerHTML='<div class="chat-sugg-hint">Sugestões — toque para enviar</div>';
+    var list=document.createElement("div");list.className="chat-sugg-list";w.appendChild(list);
+    var limit=(!expanded&&vis.length>4)?3:vis.length;
+    vis.slice(0,limit).forEach(function(chip){
+      var b=document.createElement("button");b.type="button";b.className="chat-sugg-pill";b.textContent=chip.textContent;
+      b.addEventListener("click",function(){if(chip.isConnected)chip.click();});
+      list.appendChild(b);
+    });
+    if(limit<vis.length){
+      var m=document.createElement("button");m.type="button";m.className="chat-sugg-more";m.textContent="+ ver mais ("+(vis.length-limit)+")";
+      m.addEventListener("click",function(){expanded=true;render(true);});
+      list.appendChild(m);
+    }
+    return w;
+  }
+  function render(force){
+    var cs=chips();
+    if(!cs.length){removeBox();lastLabels="";expanded=false;return;}
+    var sugg=cs.some(function(b){return b.classList.contains("chat-sugg");});
+    var labels=(sugg?"S":"C")+cs.map(function(b){return b.textContent;}).join("§");
+    var sig=labels+cs.map(function(b){return visible(b)?1:0;}).join("");
+    if(labels!==lastLabels){expanded=false;lastLabels=labels;}
+    if(!force&&box&&box.isConnected&&box._sig===sig&&!busy){if(msgs.lastElementChild!==box)msgs.appendChild(box);return;}
+    if(busy&&box&&box.isConnected&&box._sig===sig)return;
+    var nb=sugg?buildSugg(cs):buildChoice(cs);nb._sig=sig;
+    if(box&&box.parentNode)box.parentNode.replaceChild(nb,box);else msgs.appendChild(nb);
+    box=nb;busy=false;toBottom();
+  }
+  var raf=0;function schedule(){if(raf)return;raf=requestAnimationFrame(function(){raf=0;render(false);});}
+  new MutationObserver(function(){if(!scroll.children.length){removeBox();lastLabels="";}schedule();}).observe(scroll,{childList:true,subtree:true,attributes:true,attributeFilter:["style","class"]});
+  /* A cópia na conversa não conta como mensagem (histórico do Voltar e resumo das respostas) */
+  try{
+    var _count=chatMsgCount,_trim=trimMessagesTo,_clear=clearChatOptions;
+    chatMsgCount=function(){return _count()-(box&&box.parentNode===msgs?1:0);};
+    trimMessagesTo=function(e){removeBox();return _trim(e);};
+    clearChatOptions=function(){var r=_clear.apply(this,arguments);removeBox();lastLabels="";return r;};
+  }catch(e){}
+
+  /* C) múltipla escolha: dica, quadrados, separador do "Nenhum" e botão Confirmar (N) */
+  function plural(n){return n===1?"1 selecionada":n+" selecionadas";}
+  function decorateMulti(){
+    Array.prototype.forEach.call(msgs.querySelectorAll(".chat-inline-row"),function(row){
+      var send=row.querySelector(".chat-inline-send-btn");if(!send)return;
+      var btns=Array.prototype.slice.call(row.querySelectorAll(".chat-inline-btn"));if(!btns.length)return;
+      row.classList.add("chat-multi");
+      var bubble=row.parentNode,answered=btns.every(function(b){return b.disabled;});
+      var hint=bubble.querySelector(":scope > .chat-multi-hint");
+      if(!hint){hint=document.createElement("div");hint.className="chat-multi-hint";hint.innerHTML='<span class="chat-hint-ico check" aria-hidden="true"></span><span>Marque <strong>todas</strong> as opções que se aplicam</span>';bubble.insertBefore(hint,row);}
+      hint.classList.toggle("is-answered",answered);row.classList.toggle("is-answered",answered);
+      var opts=row.querySelector(".chat-inline-options"),none=row.querySelector(".chat-inline-none");
+      if(opts){opts.setAttribute("role","group");opts.setAttribute("aria-label","Marque todas as opções que se aplicam");}
+      btns.forEach(function(b){var on=b.classList.contains("active");if(b.getAttribute("aria-pressed")!==String(on))b.setAttribute("aria-pressed",String(on));});
+      if(none&&!(none.previousElementSibling&&none.previousElementSibling.classList.contains("chat-inline-none-sep"))&&none.previousElementSibling){var sp=document.createElement("div");sp.className="chat-inline-none-sep";sp.setAttribute("aria-hidden","true");none.parentNode.insertBefore(sp,none);}
+      if(answered){if(!send.disabled)send.disabled=true;return;}
+      var n=btns.filter(function(b){return b.classList.contains("active")&&!b.classList.contains("chat-inline-none");}).length;
+      var noneOn=!!(none&&none.classList.contains("active"));
+      var txt,dis=false;
+      if(n>0)txt='Confirmar <span class="cnt">('+plural(n)+')</span>';
+      else if(noneOn)txt='Confirmar <span class="cnt">('+none.textContent+')</span>';
+      else if(none){txt="Marque ao menos uma opção";dis=true;}
+      else txt='Confirmar <span class="cnt">(nenhuma)</span>';
+      if(send.dataset.lbl!==txt){send.dataset.lbl=txt;send.innerHTML=txt;send.title="Confirmar seleção";send.setAttribute("aria-label",send.textContent);}
+      if(send.disabled!==dis)send.disabled=dis;
+    });
+  }
+  var raf2=0;new MutationObserver(function(){if(raf2)return;raf2=requestAnimationFrame(function(){raf2=0;decorateMulti();if(box&&box.isConnected&&msgs.lastElementChild!==box)msgs.appendChild(box);});}).observe(msgs,{childList:true,subtree:true,attributes:true,attributeFilter:["class","disabled"]});
+
+  /* Faixa de etapa: número de segmentos da barra = N de "Etapa X de N" */
+  try{
+    var _phase=setChatPhase,track=document.querySelector("#chatHeader .chat-mobile-progress-track");
+    var stage=null;if(track){stage=document.createElement("span");stage.className="chat-stage-fill";track.appendChild(stage);}
+    setChatPhase=function(e){var r=_phase.apply(this,arguments);var m=/Etapa\s+(\d+)\s+de\s+(\d+)/i.exec(e||"");if(track&&m){track.style.setProperty("--seg",m[2]);stage.style.width=Math.min(100,100*(+m[1])/(+m[2]))+"%";}else if(stage&&!e)stage.style.width="0";var p=document.getElementById("chatProgress");if(p)p.title=p.textContent;return r;};
+  }catch(e){}
+})();
+</script>
+
 </body>
 </html>
